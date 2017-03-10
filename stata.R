@@ -1,0 +1,11 @@
+# install.packages("foreign")
+library(foreign)
+data <- read.dta(file = "uis.dta")
+str(data)
+# write.dta(data, "D://myfuzzydata.dta")
+summary(data)
+write.csv(data, "uis.csv")
+
+install.packages("xlsx")
+library("xlsx")
+write.xlsx(data, "uis.xlsx")
