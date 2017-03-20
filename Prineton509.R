@@ -91,3 +91,105 @@ fits <- mutate_each(Fits, funs(dens), -age)
 (g <- arrangeGrob(g1, g2, ncol = 2))
 
 ggsave("co3539cr.png", plot = g, width = 10, height = 5, dpi = 72)
+
+
+
+
+
+
+
+
+
+
+
+
+
+########### Infant and Child Mortality in Colombia ----
+
+# Data Preparation
+
+require(foreign)
+somoza <- read.dta("http://data.princeton.edu/wws509/datasets/somoza.dta")
+str(somoza)
+summary(somoza)
+somoza
+tapply(somoza$alive, somoza$sex, summary)
+
+s <- aggregate(dead ~ cohort + age, data = somoza, sum)
+s
+
+s$alive <- aggregate(alive ~ cohort + age, data=somoza, sum)[,"alive"]
+s
+s <- s[order(s$cohort, s$age), ]
+s
+s$exposure <- 0
+s
+
+w <- c(1,2,3,6,12,24,36,60)/12
+# Table 7.1
+for(cohort in levels(s$cohort)) {
+  i <- which(s$cohort == cohort)
+             data <- s[i,]
+             n <- sum(data$alive + data$dead)
+             exit <- n - cumsum(data$alive + data$dead)
+             enter <- c(n, exit[-length(exit)])
+             s[i,"exposure"] <- w*(enter+exit)/2
+}
+
+s
+
+# After calculating exposure I dropped kids older than ten, as we are only interested in survival to age ten. 
+# I also renamed "dead" to "deaths", which makes more sense
+
+co <- subset(s, age != "10+ years")
+co$age <- factor(co$age)
+names(co)[3] <- "deaths"
+co
+
+
+#########Poisson Model (NULL) ##############
+co$os <- log(co$exposure)
+#NULL Model
+em <- glm(deaths ~ offset(os), family=poisson, data=co)
+summary(em)
+deviance(em)
+
+em0 <- glm(deaths ~ 1, family=poisson, data=co)
+summary(em0)
+# Age
+em2 <- glm(deaths ~ offset(os) + age, family = poisson, data=co)
+summary(em2)
+#Cohort
+em3 <- glm(deaths ~ offset(os) + cohort, family=poisson, data=co)
+summary(em3)
+#Additive
+em4 <- glm(deaths ~ offset(os) + age + cohort, family=poisson, data=co)
+summary(em4)
+
+em5 <- glm(deaths ~ offset(os) + age*cohort, family=poisson, data=co)
+summary(em5)
+
+
+exp(coef(em))
+# exp(-3.996449 ) * 1000
+
+sum(co$deaths) / sum(co$exposure)
+# identical((sum(co$deaths) / sum(co$exposure)), exp(coef(em)))
+
+exp(coef(em2))
+
+exp(coef(em4))
+pchisq(deviance(em4), em4$df.residual, lower.tail = FALSE)
+
+j <- grep("cohort", names(coef(em4)))
+j
+exp(coef(em4)[j]) - 1
+
+
+# Estimating Survival Probabilities
+
+co$hazard <- predict(em4, type="response")/co$exposure
+co
+w
+w <- w[-8]
+w
